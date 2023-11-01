@@ -141,3 +141,27 @@ class Preprocessing:
     
     def normalizeImage(self, image):
         return (image * 255).astype(np.uint8)
+    
+    def water_meter_segmentation(self, threshold, char_width, char_height):
+        original_image = self.to_binary(threshold=threshold)
+        inverted_image = self.invert_binary_image()
+        data = self.erode_binary_image(kernel_size=3, iteration=3)
+        data = self.dilate_binary_image(kernel_size=3, iteration=4)
+        data = self.erode_binary_image(kernel_size=3, iteration=7)
+        data = self.dilate_binary_image(kernel_size=3, iteration=4)
+        data = self.erode_binary_image(kernel_size=3, iteration=1)
+        data = self.logical_and_binary_images(data, inverted_image)
+        data = self.dilate_binary_image(kernel_size=3, iteration=8)
+        data = self.erode_binary_image(kernel_size=3, iteration=1)
+        data = self.to_otsu()
+
+        x, y, w, h = self.find_largest_contour_coordinates()
+        self.get_sub_image(original_image, x, y, w, h)
+        self.resize(395, 75)
+        self.convert_edge_to_black_with_thickness(8)
+        self.get_higher_text_line_segmentation()
+        chars = self.char_column_segmentation(char_width, char_height)
+
+        return chars
+
+
