@@ -9,3 +9,5 @@ https://drive.google.com/file/d/1WmYQ5r9c8HAvyssGlPmS_VF4vYrOpqBn/view?usp=shari
 #Playground
 
 python main.py playground -i img\test\meter.png -o img\test_out\
+
+python main.py playground -i img\test\meter2.jpg -o img\test_out\meter2.jpg

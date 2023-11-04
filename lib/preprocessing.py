@@ -6,9 +6,17 @@ class Preprocessing:
     def __init__(self, input_path):
         self.input_path = input_path
         self.image = cv2.imread(input_path)
+        self.ori_image = self.image
+        self.img_height, self.img_width = self.image.shape[:2]
 
     def save_image(self, output_path):
         cv2.imwrite(output_path, self.image)
+
+    def get_original_image(self):
+        return self.ori_image
+
+    def set_image(self, image_imput):
+        self.image = image_imput
 
     def to_gray(self):
         self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
@@ -17,12 +25,37 @@ class Preprocessing:
     def to_binary(self, threshold=128):
         gray_image = self.to_gray()
         _, binary_image = cv2.threshold(
+            gray_image, threshold, 1, cv2.THRESH_BINARY)
+        return binary_image
+
+    def to_binary_otsu(self, threshold=128):
+        gray_image = self.to_gray()
+        _, binary_image = cv2.threshold(
             gray_image, threshold, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         return binary_image
-    
+
     def to_otsu(self):
-        _, self.image = cv2.threshold(self.image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        _, self.image = cv2.threshold(
+            self.image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         return self.image
+
+    def sharpening(self, imageInput, kernel=np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])):
+        sharpened_image = cv2.filter2D(imageInput, -1, kernel)
+        return sharpened_image
+
+    def add_weight(self, imageInput, brightness=10, contrast=2.3):
+        result = cv2.addWeighted(imageInput, contrast, np.zeros(
+            imageInput.shape, imageInput.dtype), 0, brightness)
+        return result
+
+    def enhance_colour(self, imageInput, hue=0.7, saturnation=1.5, value=0.5):
+        image = cv2.cvtColor(imageInput, cv2.COLOR_BGR2HSV)
+        image[:, :, 0] = image[:, :, 0] * hue
+        image[:, :, 1] = image[:, :, 1] * saturnation
+        image[:, :, 2] = image[:, :, 2] * value
+
+        result = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
+        return result
 
     def invert_binary_image(self):
         self.image = cv2.bitwise_not(self.image)
@@ -138,10 +171,113 @@ class Preprocessing:
             columns.append(current_column)
 
         return columns
-    
+
+    def blur_image(self, image_input, kSize=(7, 7)):
+        self.image = cv2.blur(image_input, kSize)
+        return self.image
+
+    def median_blur(self, imageInput, kSize=(7, 7)):
+        result = cv2.medianBlur(imageInput, kSize)
+        return result
+
+    def gaussian_blur(self, imageInput, kSize=(7, 7), sigmaX=0):
+        result = cv2.GaussianBlur(imageInput, ksize=kSize, sigmaX=sigmaX)
+        return result
+
+    def hough_circles(self, image_input, dp, minDist, param1, param2, minRadius, maxRadius, maskingType=0):
+        detected_circles = None
+        cropped_image = None
+        image_with_all_circle = self.ori_image
+
+        while detected_circles is None or len(detected_circles[0]) < 1:
+            detected_circles = cv2.HoughCircles(image_input,
+                                                cv2.HOUGH_GRADIENT, dp=dp, minDist=minDist, param1=param1,
+                                                param2=param2, minRadius=minRadius, maxRadius=maxRadius)
+            print("param1: ", param1, "param2: ", param2, "minRadius: ", minRadius, "maxRadius: ", maxRadius)
+            print("Detected: ", detected_circles)
+            if detected_circles is None or len(detected_circles[0]) < 1:
+                # param1 += 5
+                # param2 += 5
+                minRadius += 1
+                maxRadius += 1
+
+        masking = np.zeros((self.img_height, self.img_width), dtype=np.uint8)
+        masking_background = np.ones(
+            (self.img_height, self.img_width, 3), dtype=np.uint8)
+        if detected_circles is not None:
+            # Convert the circle parameters a, b and r to integers.
+            detected_circles = np.uint16(np.around(detected_circles))
+
+            for i in range(len(detected_circles[0])):
+                x, y, rad = detected_circles[0][i][0], detected_circles[0][i][1], detected_circles[0][i][2]
+                cv2.circle(image_with_all_circle, (x, y), rad, (0, 255, 0), 2)
+
+            resultCoordinate = self.find_intersecting_circle(
+                detected_circles[0])
+
+            a, b, r = resultCoordinate[0], resultCoordinate[1], resultCoordinate[2]
+
+            cv2.circle(self.image, (a, b), r, (0, 255, 0), 2)
+            cv2.circle(masking, (a, b), r, 1, thickness=-1)
+            cv2.circle(masking_background, (a, b), r, 0, thickness=-1)
+
+            # Hitung koordinat titik awal (x1, y1) dan titik akhir (x2, y2) untuk crop
+            x1, y1 = max(0, a - r), max(0, b - r)
+            x2, y2 = min(
+                self.ori_image.shape[1], a + r), min(self.ori_image.shape[0], b + r)
+            mask_image = self.masking_area(self.ori_image, masking)
+            if maskingType <= 0:
+                cropped_image = mask_image[y1:y2, x1:x2]
+            else:
+                mask_image = cv2.add(mask_image, masking_background)
+                cropped_image = mask_image[y1:y2, x1:x2]
+
+        if maskingType <= 0:
+            return self.image, image_with_all_circle, masking, cropped_image
+        else:
+            return self.image, image_with_all_circle, masking_background, cropped_image
+
+    def masking_area(self, original_image, masking_image):
+        masked_image = cv2.bitwise_and(
+            original_image, original_image, mask=masking_image)
+        return masked_image
+
+    def find_intersecting_circle(self, coordinates):
+        max_intersection_count = 0
+        result_circle = None
+
+        if len(coordinates) == 1:
+            x1, y1, r1 = coordinates[0]
+            result_circle = (x1, y1, r1)
+            result_circle
+        else:
+            for i in range(len(coordinates)):
+                intersection_count = 0
+                x1, y1, r1 = coordinates[i]
+
+                for j in range(len(coordinates)):
+                    if i != j:
+                        x2, y2, r2 = coordinates[j]
+
+                        distance = int(((np.float64(x2) - np.float64(x1)) **
+                                       2 + (np.float64(y2) - np.float64(y1)) ** 2) ** 0.5)
+
+                        if distance < r1 + r2:
+                            intersection_count += 1
+
+            if intersection_count > max_intersection_count:
+                max_intersection_count = intersection_count
+                result_circle = (x1, y1, r1)
+
+        return result_circle
+
     def normalizeImage(self, image):
-        return (image * 255).astype(np.uint8)
-    
+        normalized_image = image.astype(np.float32)
+        min_val = np.min(normalized_image)
+        max_val = np.max(normalized_image)
+        normalized_image = (normalized_image - min_val) / (max_val - min_val)
+        return (normalized_image * 255).astype(np.uint8)
+
     def water_meter_segmentation(self, threshold, char_width, char_height):
         original_image = self.to_binary(threshold=threshold)
         inverted_image = self.invert_binary_image()
@@ -163,5 +299,3 @@ class Preprocessing:
         chars = self.char_column_segmentation(char_width, char_height)
 
         return chars
-
-

@@ -37,11 +37,25 @@ def main():
     elif args.command == "playground":
 
         prep = Preprocessing(args.input)
+        # result = prep.get_original_image()
+        # result = prep.enhance_colour(result, hue=1.1, saturnation=1.5, value=0.9)
+        # result = prep.gaussian_blur(result,kSize=(7,7), sigmaX=2.5)
+        # result = prep.sharpening(result)
+        result = prep.to_binary(128)
+        data, image_with_all_circle, masking, result = prep.hough_circles(result, 2, 2, 1.0, 26, 190, 200, maskingType=1)
+        # result = prep.enhance_colour(result)
+        # result = prep.sharpening(result)
+        # prep.set_image(result)
+        # result = prep.to_binary(128)
+
+        cv2.imwrite(args.output, prep.normalizeImage(image_with_all_circle))
+
+
         
-        chars = prep.water_meter_segmentation(128, 20,20)
-        for i, image in enumerate(chars):
-            filename = args.output + f'image_segment_{i}.jpg'
-            cv2.imwrite(filename, prep.normalizeImage(image))
+        # chars = prep.water_meter_segmentation(128, 20,20)
+        # for i, image in enumerate(chars):
+        #     filename = args.output + f'image_segment_{i}.jpg'
+        #     cv2.imwrite(filename, prep.normalizeImage(image))
 
 
 if __name__ == "__main__":
