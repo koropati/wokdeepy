@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from .intersection_circle import find_intersection_circle
 
 
 class Preprocessing:
@@ -212,8 +213,9 @@ class Preprocessing:
                 x, y, rad = detected_circles[0][i][0], detected_circles[0][i][1], detected_circles[0][i][2]
                 cv2.circle(image_with_all_circle, (x, y), rad, (0, 255, 0), 2)
 
-            resultCoordinate = self.find_intersecting_circle(
-                detected_circles[0])
+            # resultCoordinate = self.find_intersecting_circle(detected_circles[0])
+            resultCoordinate = find_intersection_circle(detected_circles[0])
+
 
             a, b, r = resultCoordinate[0], resultCoordinate[1], resultCoordinate[2]
 
@@ -236,6 +238,33 @@ class Preprocessing:
             return self.image, image_with_all_circle, masking, cropped_image
         else:
             return self.image, image_with_all_circle, masking_background, cropped_image
+    
+    def crop_by_circle_coordinate(self, imageInput, coordinate):
+        a, b, r = coordinate[0], coordinate[1], coordinate[2]
+        x1, y1 = max(0, a - r), max(0, b - r)
+        x2, y2 = min(imageInput.shape[1], a + r), min(imageInput.shape[0], b + r)
+        cropped_image = imageInput[y1:y2, x1:x2]
+        return cropped_image
+
+    
+    def get_hough_circles(self, image_input, dp, minDist, param1, param2, minRadius, maxRadius):
+        detected_circles = None
+        results = None
+
+        while detected_circles is None or len(detected_circles[0]) < 1:
+            detected_circles = cv2.HoughCircles(image_input,
+                                                cv2.HOUGH_GRADIENT, dp=dp, minDist=minDist, param1=param1,
+                                                param2=param2, minRadius=minRadius, maxRadius=maxRadius)
+            if detected_circles is None or len(detected_circles[0]) < 1:
+                minRadius += 1
+                maxRadius += 1
+
+        if detected_circles is not None:
+            detected_circles = np.uint16(np.around(detected_circles))
+
+            results = detected_circles[0]
+        return results
+
 
     def masking_area(self, original_image, masking_image):
         masked_image = cv2.bitwise_and(

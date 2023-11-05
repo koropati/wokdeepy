@@ -1,6 +1,8 @@
 import argparse
 import cv2
-from lib import Preprocessing
+from lib.preprocessing import Preprocessing
+from lib.unsupervised import centroid_dengan_anggota_terbanyak
+from sklearn.cluster import KMeans
 
 
 def main():
@@ -35,20 +37,34 @@ def main():
         print("hohohoh")
         # test_model(args.input, args.output)
     elif args.command == "playground":
-
+        coordinate = None
         prep = Preprocessing(args.input)
-        # result = prep.get_original_image()
+        original = prep.get_original_image()
         # result = prep.enhance_colour(result, hue=1.1, saturnation=1.5, value=0.9)
         # result = prep.gaussian_blur(result,kSize=(7,7), sigmaX=2.5)
         # result = prep.sharpening(result)
         result = prep.to_binary(128)
-        data, image_with_all_circle, masking, result = prep.hough_circles(result, 2, 2, 1.0, 26, 190, 200, maskingType=1)
+        coordinates = prep.get_hough_circles(result, 2, 2, 1.0, 26, 190, 200)
+        data_tup = [tuple(item) for item in coordinates]
+
+        if len(coordinates) > 2 :
+            kmeans = KMeans(n_clusters=2, random_state=0)
+            kmeans.fit(coordinates)
+            centroid_terbanyak, coordinate = centroid_dengan_anggota_terbanyak(kmeans, coordinates)
+        else:
+            coordinate = coordinates[0]
+        
+        
+        print(coordinates)
+        cropped_img = prep.crop_by_circle_coordinate(original, coordinate)
+
+        # data, image_with_all_circle, masking, result = prep.hough_circles(result, 2, 2, 1.0, 26, 190, 200, maskingType=1)
         # result = prep.enhance_colour(result)
         # result = prep.sharpening(result)
         # prep.set_image(result)
         # result = prep.to_binary(128)
 
-        cv2.imwrite(args.output, prep.normalizeImage(image_with_all_circle))
+        cv2.imwrite(args.output, prep.normalizeImage(cropped_img))
 
 
         
