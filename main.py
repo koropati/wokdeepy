@@ -58,13 +58,15 @@ def main():
         print(coordinates)
         cropped_img = prep.crop_by_circle_coordinate(original, coordinate)
 
-        # data, image_with_all_circle, masking, result = prep.hough_circles(result, 2, 2, 1.0, 26, 190, 200, maskingType=1)
+        data, image_with_all_circle, masking, result = prep.hough_circles(result, 2, 2, 1.0, 26, 190, 200, maskingType=1)
         # result = prep.enhance_colour(result)
         # result = prep.sharpening(result)
         # prep.set_image(result)
         # result = prep.to_binary(128)
 
-        cv2.imwrite(args.output, prep.normalizeImage(cropped_img))
+
+
+        cv2.imwrite(args.output, prep.normalizeImage(image_with_all_circle))
 
 
         
